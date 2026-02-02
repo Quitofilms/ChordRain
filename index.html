@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Chord Rain V4.3: Safe UI</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Referenced locally for offline support -->
+    <script src="tailwind.min.js"></script>
     <style>
         body {
             touch-action: pan-y; 
@@ -47,15 +48,13 @@
         .chord-name { font-weight: 900; font-size: 5vmin; color: white; text-shadow: 0 0.4vmin 0.8vmin rgba(0,0,0,0.8); letter-spacing: -1px; line-height: 1; }
         .chord-progress { font-size: 3vmin; color: rgba(255,255,255,0.9); margin-top: -0.5vmin; letter-spacing: 0.5vmin; font-weight: bold; }
 
-        /* --- CONTROLS (Updated with Safety Padding) --- */
+        /* --- CONTROLS --- */
         #controlsContainer {
             height: 50vh; 
             background: #1a1a1a; 
             display: flex; flex-direction: column; justify-content: center;
             box-shadow: inset 0 1vmin 2vmin rgba(0,0,0,0.5);
             position: relative;
-            
-            /* CRITICAL FIX: Safe Zone for Bottom Bar */
             padding-bottom: 8vh; 
             padding-top: 1vh;
         }
@@ -95,24 +94,25 @@
         }
 
         .white-key {
-            flex: 1; height: 90%; /* Reduced height so it doesn't touch bottom */
+            flex: 1; height: 90%; 
             background: white; 
             border: 1px solid #ccc; border-radius: 0 0 1vmin 1vmin;
             margin: 0 0.2vmin; position: relative; z-index: 1;
             display: flex; align-items: flex-end; justify-content: center;
-            padding-bottom: 4vmin; /* Raised text up */
+            padding-bottom: 4vmin; 
             color: #333; font-weight: bold; font-size: 3vmin;
             box-shadow: inset 0 -1vmin 2vmin rgba(0,0,0,0.1);
         }
         .white-key:active, .white-key.pressed { background: #93c5fd; transform: scale(0.98); transform-origin: top; }
 
         .black-key {
-            position: absolute; top: 0; width: 6%; height: 55%; 
+            position: absolute; top: 0; width: 80%; height: 55%; 
             background: #111; border-radius: 0 0 1vmin 1vmin;
             z-index: 10; box-shadow: 0 0.5vmin 1vmin rgba(0,0,0,0.5);
             display: flex; align-items: flex-end; justify-content: center;
             padding-bottom: 1.5vmin; color: #888; font-size: 2vmin; font-weight: bold;
             border: 1px solid #333; border-top: none;
+            left: 60%;
         }
         .black-key:active, .black-key.pressed { background: #2563eb; color:white; }
 
@@ -124,7 +124,7 @@
             box-shadow: 0 0.4vmin 0.8vmin rgba(0,0,0,0.5); animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             z-index: 20;
         }
-        .white-key .hint-badge { top: auto; bottom: 8vmin; } /* Raised hint */
+        .white-key .hint-badge { top: auto; bottom: 8vmin; }
         .black-key .hint-badge { top: auto; bottom: 5vmin; }
         
         @keyframes popIn { 0% { transform: scale(0); } 100% { transform: scale(1); } }
@@ -192,7 +192,6 @@
         }
         .start-btn:active { transform: scale(0.98); }
         .hidden { display: none !important; }
-        #pauseOverlay { background: rgba(0,0,0,0.8); justify-content: center; overflow: hidden;}
 
         /* MESSAGES */
         #gameMessage {
@@ -350,7 +349,12 @@
 
 <script>
     // --- MUSIC DATA ---
-    const KEYS = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+    const KEYS_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+    const KEYS_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    
+    // Theoretical Sharp Keys (Major): G, D, A, E, B, F#
+    const SHARP_KEYS = ['G', 'D', 'A', 'E', 'B', 'F#'];
+
     const INTERVALS = { 'Major': [0, 2, 4, 5, 7, 9, 11], 'Minor': [0, 2, 3, 5, 7, 8, 10] };
     const CHORD_POOLS = {
         'Major': {
@@ -440,7 +444,7 @@
     // --- UI LOGIC ---
     function initSetupScreen() {
         const container = document.getElementById('keySelector'); container.innerHTML = '';
-        KEYS.forEach(k => {
+        KEYS_FLAT.forEach(k => {
             const btn = document.createElement('div'); btn.className = `key-select-btn ${k === selectedKey ? 'selected' : ''}`;
             btn.innerText = k;
             btn.onclick = () => { selectedKey = k; document.querySelectorAll('.key-select-btn').forEach(b => b.classList.remove('selected')); btn.classList.add('selected'); };
@@ -473,8 +477,16 @@
 
     // --- GAME ENGINE ---
     function generateScaleNotes(root, mode) {
-        let rootIndex = KEYS.indexOf(root), semitones = INTERVALS[mode], notes = [];
-        semitones.forEach(interval => notes.push(KEYS[(rootIndex + interval) % 12]));
+        const rootIndex = KEYS_FLAT.indexOf(root);
+        const semitones = INTERVALS[mode];
+        const notes = [];
+        
+        const useSharps = SHARP_KEYS.includes(root);
+        const sourceKeys = useSharps ? KEYS_SHARP : KEYS_FLAT;
+
+        semitones.forEach(interval => {
+            notes.push(sourceKeys[(rootIndex + interval) % 12]);
+        });
         return notes;
     }
 
@@ -505,7 +517,11 @@
             
             const whiteKeys = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
             const blackMap = { 'C': 'Db', 'D': 'Eb', 'F': 'Gb', 'G': 'Ab', 'A': 'Bb' };
+            const blackMapSharp = { 'C': 'C#', 'D': 'D#', 'F': 'F#', 'G': 'G#', 'A': 'A#' };
             
+            const useSharps = SHARP_KEYS.includes(selectedKey);
+            const currentBlackMap = useSharps ? blackMapSharp : blackMap;
+
             for(let oct=0; oct<2; oct++) {
                 whiteKeys.forEach(note => {
                     const wKey = document.createElement('div');
@@ -521,13 +537,13 @@
                     wKey.addEventListener('touchstart', hitHandler); wKey.addEventListener('mousedown', hitHandler);
                     wrapper.appendChild(wKey);
 
-                    if (blackMap[note]) {
-                        const bNote = blackMap[note];
+                    if (currentBlackMap[note]) {
+                        const bNote = currentBlackMap[note];
                         const bKey = document.createElement('div');
                         bKey.className = 'black-key';
                         bKey.dataset.note = bNote;
+                        bKey.textContent = bNote;
                         wKey.appendChild(bKey);
-                        bKey.style.right = "-30%"; 
                         
                         const bHitHandler = (e) => {
                             e.stopPropagation(); 
